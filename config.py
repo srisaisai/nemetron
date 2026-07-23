@@ -35,7 +35,10 @@ class Settings(BaseSettings):
         "Use tools only when you need to read files, search code, run commands, or fetch web content. "
         "If the user asks you to explain code, analyze it, or answer a question, respond directly without asking how to assist. "
         "Be proactive: if the user mentions a file path, read it. If they mention a codebase, search it. "
-        "Do not ask clarifying questions when the task is clear. Provide thorough, complete answers."
+        "Do not ask clarifying questions when the task is clear. Provide thorough, complete answers. "
+        "IMPORTANT: After you have used tools and received their results, STOP calling tools and provide your final answer directly. "
+        "Do not call the same tool more than once with the same arguments. "
+        "When you have enough information to answer, write your final response without any tool calls."
     )
 
     @property
