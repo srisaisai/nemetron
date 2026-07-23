@@ -24,7 +24,8 @@ class Settings(BaseSettings):
 
     allowed_tools: str = (
         "read_file,read_multiple_files,write_file,edit_file,"
-        "list_directory,search_codebase,run_commands,create_folder,fetch_web_content"
+        "list_directory,search_codebase,run_commands,"
+        "stop_process,read_process_output,create_folder,fetch_web_content"
     )
 
     log_level: str = "INFO"

@@ -5,6 +5,7 @@ from langchain_core.tools import BaseTool
 from tools.file_dir_tools import CreateFolderTool, ListDirectoryTool
 from tools.file_read_tools import ReadFileTool, ReadMultipleFilesTool
 from tools.file_write_tools import EditFileTool, WriteFileTool
+from tools.process_tools import ReadProcessOutputTool, StopProcessTool
 from tools.search_tools import SearchCodebaseTool
 from tools.shell_tool import RunCommandsTool
 from tools.web_tool import FetchWebContentTool
@@ -18,6 +19,8 @@ _ALL_TOOLS: list[BaseTool] = [
     ListDirectoryTool(),
     SearchCodebaseTool(),
     RunCommandsTool(),
+    StopProcessTool(),
+    ReadProcessOutputTool(),
     CreateFolderTool(),
     FetchWebContentTool(),
 ]
