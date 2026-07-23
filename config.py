@@ -29,6 +29,9 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # Default tool mode: "passthrough" (VS Code executes tools live) or "agent" (proxy executes internally)
+    default_tool_mode: str = "passthrough"
+
     default_system_prompt: str = (
         "You are a helpful coding assistant. "
         "Answer questions directly and completely when you can. "

@@ -10,12 +10,14 @@ from agent import NemetronAgent
 from chat_model import NemetronChatModel
 from config import settings
 from message_conversion import openai_message_to_langchain
+from langchain_core.messages import AIMessage
 from response_builder import (
     build_openai_response,
     build_tool_calls_response,
     stream_openai_response,
 )
 from schemas import ChatCompletionRequest, ToolDefinition
+from text_cleaner import strip_thinking_tags
 from tools import get_tools
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -52,12 +54,12 @@ async def list_models():
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatCompletionRequest, http_request: FastAPIRequest):
     # Determine tool mode:
-    #   - "agent" (default): execute tools internally, return final answer
-    #   - "passthrough": return raw OpenAI-format tool_calls without executing
+    #   - "passthrough" (default): return raw tool_calls so VS Code executes them LIVE
+    #   - "agent": execute tools internally on the proxy, return final answer only
     tool_mode = (
         http_request.headers.get("x-tool-mode")
         or getattr(request, "tool_mode", None)
-        or "agent"
+        or settings.default_tool_mode
     ).lower()
     logger.info(
         "Incoming chat completion request (stream=%s, tool_mode=%s)",
@@ -102,6 +104,12 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
                 temperature=request.temperature,
                 max_tokens=explicit_max_tokens,
             )
+            # Strip thinking tags from the response content in passthrough mode too
+            if isinstance(ai_response, AIMessage) and ai_response.content:
+                ai_response = AIMessage(
+                    content=strip_thinking_tags(ai_response.content),
+                    tool_calls=ai_response.tool_calls,
+                )
             return build_tool_calls_response(
                 ai_response,
                 model=request.model,

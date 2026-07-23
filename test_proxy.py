@@ -125,13 +125,14 @@ def test_proxy_with_mock_upstream():
         assert models_resp.status_code == 200
         print("Models:", models_resp.json())
 
-        # Test chat completion with tool call loop
+        # Test chat completion with tool call loop (agent mode)
         MockNemetronHandler.call_count = 0
         resp = client.post(
             "/v1/chat/completions",
             json={
                 "model": "nemetron-30b",
                 "messages": [{"role": "user", "content": "List the nemetron folder"}],
+                "tool_mode": "agent",
                 "tools": [
                     {
                         "type": "function",
@@ -185,6 +186,7 @@ def test_streaming_response():
             json={
                 "model": "nemetron-30b",
                 "messages": [{"role": "user", "content": "Say hello"}],
+                "tool_mode": "agent",
                 "stream": True,
                 "max_tokens": 1024,
             },
