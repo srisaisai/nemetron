@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-from fastapi import FastAPI, HTTPException, Request as FastAPIRequest
+from fastapi import FastAPI, Request as FastAPIRequest
 from fastapi.responses import StreamingResponse
 
 from agent import NemetronAgent
@@ -34,6 +34,71 @@ def filter_tools(
     if not incoming_tools:
         return []
     return [tool for tool in incoming_tools if tool.function.name in allowed_names]
+
+
+async def _passthrough_stream(model, messages, tools, request):
+    """Stream the model response directly in passthrough mode."""
+    import json
+    import uuid
+    import time as time_module
+
+    completion_id = f"chatcmpl-{uuid.uuid4().hex}"
+    created = int(time_module.time())
+
+    def _sse(data):
+        return f"data: {json.dumps(data)}\n\n"
+
+    # Send role chunk first
+    yield _sse({
+        "id": completion_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": request.model,
+        "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
+    })
+
+    full_content = ""
+    full_tool_calls = []
+
+    async for chunk in model.astream(
+        messages,
+        tools=tools,
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+    ):
+        content = chunk.message.content or ""
+        full_content += content
+        # Check for tool calls in this chunk
+        if hasattr(chunk.message, "tool_call_chunks") and chunk.message.tool_call_chunks:
+            for tc in chunk.message.tool_call_chunks:
+                full_tool_calls.append({
+                    "id": tc.get("id", ""),
+                    "type": "function",
+                    "function": {
+                        "name": tc.get("name", ""),
+                        "arguments": tc.get("args", ""),
+                    },
+                })
+
+        if content:
+            yield _sse({
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": request.model,
+                "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}],
+            })
+
+    # Final chunk with finish_reason
+    finish_reason = "tool_calls" if full_tool_calls else "stop"
+    yield _sse({
+        "id": completion_id,
+        "object": "chat.completion.chunk",
+        "created": created,
+        "model": request.model,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
+    })
+    yield "data: [DONE]\n\n"
 
 
 @app.get("/v1/models")
@@ -96,15 +161,23 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
     )
 
     try:
-        # ---- PASS-THROUGH MODE: raw OpenAI-compatible tool_calls response ----
+        # ---- PASS-THROUGH MODE: raw OpenAI-compatible response ----
         if tool_mode == "passthrough":
+            if request.stream:
+                # Streaming passthrough: stream the model response directly
+                return StreamingResponse(
+                    _passthrough_stream(model, messages, tools_to_pass, request),
+                    media_type="text/event-stream",
+                )
+
+            # Non-streaming passthrough
             ai_response = await model.ainvoke(
                 messages,
                 tools=tools_to_pass,
                 temperature=request.temperature,
                 max_tokens=explicit_max_tokens,
             )
-            # Strip thinking tags from the response content in passthrough mode too
+            # Strip thinking tags
             if isinstance(ai_response, AIMessage) and ai_response.content:
                 ai_response = AIMessage(
                     content=strip_thinking_tags(ai_response.content),
@@ -117,7 +190,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
                 completion_tokens=len(str(ai_response.content or "")) // 4,
             )
 
-        # ---- AGENT MODE (default): execute tools internally ----
+        # ---- AGENT MODE: execute tools internally ----
         agent = NemetronAgent(model=model, tools=curated_tools)
 
         if request.stream:
@@ -147,7 +220,15 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
         )
     except Exception as e:
         logger.exception("Error during chat completion")
-        raise HTTPException(status_code=502, detail=f"Upstream error: {e}")
+        # Return an OpenAI-compatible error response with choices
+        # so VS Code doesn't crash with "response contained no choices"
+        error_msg = f"Upstream error: {e}"
+        return build_openai_response(
+            content=f"I encountered an error: {error_msg}",
+            model=request.model,
+            prompt_tokens=0,
+            completion_tokens=0,
+        )
 
 
 @app.get("/health")
