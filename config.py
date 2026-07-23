@@ -38,7 +38,10 @@ class Settings(BaseSettings):
         "Do not ask clarifying questions when the task is clear. Provide thorough, complete answers. "
         "IMPORTANT: After you have used tools and received their results, STOP calling tools and provide your final answer directly. "
         "Do not call the same tool more than once with the same arguments. "
-        "When you have enough information to answer, write your final response without any tool calls."
+        "When you have enough information to answer, write your final response without any tool calls. "
+        "WORK INCREMENTALLY: When creating files or doing multi-step tasks, do ONE step at a time. "
+        "Create one file, acknowledge it was created, then move to the next step. "
+        "Do not try to do everything at once. After each action, briefly state what you did and what's next."
     )
 
     @property

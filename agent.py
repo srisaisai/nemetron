@@ -64,9 +64,14 @@ class NemetronAgent:
         history: list[BaseMessage],
         seen_signatures: set[str],
         iteration: int,
-    ) -> tuple[bool, set[str]]:
-        """Execute tool calls from a response. Returns (should_break, updated_seen)."""
+    ) -> tuple[bool, set[str], list[str]]:
+        """Execute tool calls from a response.
+
+        Returns (should_break, updated_seen, completed_tool_names).
+        """
         should_break = False
+        completed_names: list[str] = []
+
         for tool_call in response.tool_calls:
             tool_name = tool_call.get("name", "")
             tool_args = tool_call.get("args", {})
@@ -93,8 +98,30 @@ class NemetronAgent:
                     result_text = f"Error executing tool {tool_name}: {e}"
 
             history.append(ToolMessage(content=result_text, tool_call_id=tool_id))
+            completed_names.append(tool_name)
 
-        return should_break, seen_signatures
+        return should_break, seen_signatures, completed_names
+
+    @staticmethod
+    def _build_step_nudge(completed_names: list[str], iteration: int, is_last: bool) -> HumanMessage:
+        """Build a nudge message that guides the model after tool execution."""
+        tools_str = ", ".join(completed_names) if completed_names else "tools"
+        if is_last:
+            content = (
+                f"Step {iteration + 1} completed ({tools_str}). "
+                "This was your last allowed step. You now MUST provide your final answer "
+                "to the user. Do NOT call any more tools. Summarize everything you did "
+                "and present the final result."
+            )
+        else:
+            content = (
+                f"Step {iteration + 1} completed ({tools_str}). "
+                "If you have finished all the work the user asked for, provide your final "
+                "answer now WITHOUT calling any tools. "
+                "If there are more steps to complete, continue with the next step "
+                "(one action at a time)."
+            )
+        return HumanMessage(content=content)
 
     async def arun(
         self,
@@ -136,9 +163,12 @@ class NemetronAgent:
                 return final_content
 
             history.append(response)
-            should_break, seen_signatures = await self._execute_tool_calls(
+            should_break, seen_signatures, completed_names = await self._execute_tool_calls(
                 response, history, seen_signatures, iteration
             )
+
+            # Add a step nudge to guide the model toward incremental progress
+            history.append(self._build_step_nudge(completed_names, iteration, is_last))
 
             if should_break:
                 # Duplicate detected — force a final answer on next call
@@ -208,9 +238,12 @@ class NemetronAgent:
                 return
 
             history.append(response)
-            should_break, seen_signatures = await self._execute_tool_calls(
+            should_break, seen_signatures, completed_names = await self._execute_tool_calls(
                 response, history, seen_signatures, iteration
             )
+
+            # Add a step nudge to guide the model toward incremental progress
+            history.append(self._build_step_nudge(completed_names, iteration, is_last))
 
             if should_break:
                 forced = await self.model.ainvoke(
