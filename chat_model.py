@@ -85,9 +85,14 @@ class NemetronChatModel(BaseChatModel):
         openai_messages = [message_to_openai(m) for m in messages]
         openai_tools = self._convert_tools(kwargs.get("tools"))
 
-        initial_max = kwargs.get("max_tokens") or self.max_tokens or settings.initial_max_tokens
+        requested_max = kwargs.get("max_tokens") or self.max_tokens
+        initial_max = requested_max or settings.initial_max_tokens
         max_cap = settings.max_output_tokens
-        enable_expansion = kwargs.get("enable_token_expansion", settings.enable_token_expansion)
+        # Only auto-expand when the client did NOT explicitly request a token limit
+        enable_expansion = (
+            kwargs.get("enable_token_expansion", settings.enable_token_expansion)
+            and requested_max is None
+        )
 
         max_tokens = min(initial_max, max_cap)
 

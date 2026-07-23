@@ -24,13 +24,6 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Nemetron LangChain Proxy")
 
 
-def resolve_max_tokens(requested: int | None) -> int:
-    """Resolve the starting max_tokens for progressive expansion."""
-    if requested is None or requested <= 0:
-        return settings.initial_max_tokens
-    return min(requested, settings.max_output_tokens)
-
-
 def filter_tools(
     incoming_tools: list[ToolDefinition] | None,
     allowed_names: set[str],
@@ -72,10 +65,10 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
         tool_mode,
     )
 
-    max_tokens = resolve_max_tokens(request.max_tokens)
+    explicit_max_tokens = request.max_tokens if request.max_tokens and request.max_tokens > 0 else None
     logger.info(
-        "Using starting max_tokens=%d (expansion=%s, cap=%d)",
-        max_tokens,
+        "Max tokens: explicit=%s, expansion=%s, cap=%d",
+        explicit_max_tokens,
         settings.enable_token_expansion,
         settings.max_output_tokens,
     )
@@ -97,7 +90,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
     model = NemetronChatModel(
         model_name=request.model,
         temperature=request.temperature,
-        max_tokens=max_tokens,
+        max_tokens=explicit_max_tokens,
     )
 
     try:
@@ -107,7 +100,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
                 messages,
                 tools=tools_to_pass,
                 temperature=request.temperature,
-                max_tokens=max_tokens,
+                max_tokens=explicit_max_tokens,
             )
             return build_tool_calls_response(
                 ai_response,
@@ -123,7 +116,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
             final_content = await agent.arun(
                 messages,
                 temperature=request.temperature,
-                max_tokens=max_tokens,
+                max_tokens=explicit_max_tokens,
                 tools=tools_to_pass,
             )
             return StreamingResponse(
@@ -134,7 +127,7 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
         final_content = await agent.arun(
             messages,
             temperature=request.temperature,
-            max_tokens=max_tokens,
+            max_tokens=explicit_max_tokens,
             tools=tools_to_pass,
         )
 
