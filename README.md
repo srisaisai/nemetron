@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Nemetron LangChain Proxy
 
 A lightweight **OpenAI-compatible proxy** for your local **Nemetron 30B** model, built with **FastAPI** and **LangChain Core**.
@@ -244,3 +245,6 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 - The proxy does **not** use `langchain-community`. Only `langchain-core` is required.
 - Streaming responses are supported; the agent loop runs internally first, then the final answer is streamed.
 - If the upstream Nemetron API is not running, the proxy will return an error on the first request.
+=======
+# nemetron
+>>>>>>> 367bc0da30251749c8e0e7e3b5f4c71ce228ca6e
