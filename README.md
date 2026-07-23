@@ -62,8 +62,9 @@ Key variables:
 | `NEMETRON_BASE_URL` | `http://10.33.11.12:8103` | Your local Nemetron API |
 | `NEMETRON_MODEL` | `nemetron-30b` | Model name reported to clients |
 | `PROXY_PORT` | `8000` | Port the proxy listens on |
-| `DEFAULT_MAX_TOKENS` | `262000` | Default output tokens if client sends none |
-| `MAX_OUTPUT_TOKENS` | `262000` | Hard ceiling for output tokens |
+| `INITIAL_MAX_TOKENS` | `8192` | Starting output token limit |
+| `MAX_OUTPUT_TOKENS` | `262000` | Maximum output token ceiling |
+| `ENABLE_TOKEN_EXPANSION` | `true` | Auto-expand tokens if truncated |
 | `ALLOWED_TOOLS` | comma-separated | Curated tool names exposed to the model |
 
 ### 3. Start the proxy
@@ -94,7 +95,8 @@ The extension will now talk to the proxy, which handles tool filtering and orche
 
 ## Available Curated Tools
 
-The proxy exposes only these tools to the model (customizable via `ALLOWED_TOOLS`):
+| `ENABLE_TOKEN_EXPANSION` | `true` | Auto-expand tokens if truncated |
+| `ALLOWED_TOOLS` | comma-separated | Curated tool names exposed to the model |
 
 | Tool | Purpose |
 |------|---------|
@@ -248,5 +250,17 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 ## Thinking Tag Filtering
 
 The proxy automatically strips `<think>...</think>` and similar reasoning tags from model responses before returning them to VS Code. You only see the final answer.
+
+---
+
+## Progressive Token Expansion
+
+Instead of a fixed token limit, the proxy uses progressive expansion:
+
+1. Starts with `INITIAL_MAX_TOKENS` (default 8192)
+2. If the model response is truncated (`finish_reason == "length"`), doubles the limit
+3. Repeats until complete or `MAX_OUTPUT_TOKENS` (262000) is reached
+
+Set `ENABLE_TOKEN_EXPANSION=false` to disable and use a fixed limit.
 
 ---

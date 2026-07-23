@@ -17,8 +17,10 @@ class Settings(BaseSettings):
     proxy_host: str = "0.0.0.0"
     proxy_port: int = 8000
 
-    default_max_tokens: int = 262000
+    # Output token handling (progressive expansion)
+    initial_max_tokens: int = 8192
     max_output_tokens: int = 262000
+    enable_token_expansion: bool = True
 
     allowed_tools: str = (
         "read_file,read_multiple_files,write_file,edit_file,"

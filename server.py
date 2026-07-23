@@ -25,9 +25,9 @@ app = FastAPI(title="Nemetron LangChain Proxy")
 
 
 def resolve_max_tokens(requested: int | None) -> int:
-    """Resolve max_tokens, avoiding low default ceilings."""
+    """Resolve the starting max_tokens for progressive expansion."""
     if requested is None or requested <= 0:
-        return settings.default_max_tokens
+        return settings.initial_max_tokens
     return min(requested, settings.max_output_tokens)
 
 
@@ -73,7 +73,12 @@ async def chat_completions(request: ChatCompletionRequest, http_request: FastAPI
     )
 
     max_tokens = resolve_max_tokens(request.max_tokens)
-    logger.info("Using max_tokens=%d", max_tokens)
+    logger.info(
+        "Using starting max_tokens=%d (expansion=%s, cap=%d)",
+        max_tokens,
+        settings.enable_token_expansion,
+        settings.max_output_tokens,
+    )
 
     messages = [openai_message_to_langchain(m) for m in request.messages]
 

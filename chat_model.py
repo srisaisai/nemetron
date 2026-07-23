@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, AsyncIterator, Iterator, List, Optional
 
 from langchain_core.callbacks import (
@@ -15,6 +16,8 @@ from config import settings
 from message_utils import message_to_openai, openai_choice_to_ai_message
 from nemetron_client import NemetronClient
 from stream_bridge import async_iter_to_sync, run_sync
+
+logger = logging.getLogger(__name__)
 
 
 class NemetronChatModel(BaseChatModel):
@@ -82,15 +85,35 @@ class NemetronChatModel(BaseChatModel):
         openai_messages = [message_to_openai(m) for m in messages]
         openai_tools = self._convert_tools(kwargs.get("tools"))
 
-        response = await self.client.chat_completion(
-            messages=openai_messages,
-            tools=openai_tools,
-            temperature=kwargs.get("temperature", self.temperature),
-            max_tokens=kwargs.get("max_tokens", self.max_tokens),
-            stop=stop,
-        )
+        initial_max = kwargs.get("max_tokens") or self.max_tokens or settings.initial_max_tokens
+        max_cap = settings.max_output_tokens
+        enable_expansion = kwargs.get("enable_token_expansion", settings.enable_token_expansion)
 
-        choice = response["choices"][0]
+        max_tokens = min(initial_max, max_cap)
+
+        while True:
+            response = await self.client.chat_completion(
+                messages=openai_messages,
+                tools=openai_tools,
+                temperature=kwargs.get("temperature", self.temperature),
+                max_tokens=max_tokens,
+                stop=stop,
+            )
+
+            choice = response["choices"][0]
+            finish_reason = choice.get("finish_reason")
+
+            if finish_reason != "length" or not enable_expansion or max_tokens >= max_cap:
+                break
+
+            previous_max = max_tokens
+            max_tokens = min(max_tokens * 2, max_cap)
+            logger.info(
+                "Response truncated at %d tokens; expanding to %d",
+                previous_max,
+                max_tokens,
+            )
+
         ai_message = openai_choice_to_ai_message(choice)
         generation = ChatGeneration(message=ai_message)
         return ChatResult(generations=[generation])
