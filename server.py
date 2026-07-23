@@ -64,19 +64,19 @@ async def _passthrough_stream(model, messages, tools, request):
         messages,
         tools=tools,
         temperature=request.temperature,
-        max_tokens=request.max_tokens,
+        max_tokens=request.max_tokens if request.max_tokens else None,
     ):
-        content = chunk.message.content or ""
+        content = chunk.content or ""
         full_content += content
         # Check for tool calls in this chunk
-        if hasattr(chunk.message, "tool_call_chunks") and chunk.message.tool_call_chunks:
-            for tc in chunk.message.tool_call_chunks:
+        if hasattr(chunk, "tool_call_chunks") and chunk.tool_call_chunks:
+            for tc in chunk.tool_call_chunks:
                 full_tool_calls.append({
-                    "id": tc.get("id", ""),
+                    "id": tc.get("id", "") if hasattr(tc, "get") else "",
                     "type": "function",
                     "function": {
-                        "name": tc.get("name", ""),
-                        "arguments": tc.get("args", ""),
+                        "name": tc.get("name", "") if hasattr(tc, "get") else "",
+                        "arguments": tc.get("args", "") if hasattr(tc, "get") else "",
                     },
                 })
 
