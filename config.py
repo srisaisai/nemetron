@@ -10,15 +10,15 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    nemetron_base_url: str = "http://localhost:11434"
+    nemetron_base_url: str = "http://10.33.11.12:8103"
     nemetron_api_key: str = "not-needed"
     nemetron_model: str = "nemetron-30b"
 
     proxy_host: str = "0.0.0.0"
     proxy_port: int = 8000
 
-    default_max_tokens: int = 8192
-    max_output_tokens: int = 32768
+    default_max_tokens: int = 262000
+    max_output_tokens: int = 262000
 
     allowed_tools: str = (
         "read_file,read_multiple_files,write_file,edit_file,"

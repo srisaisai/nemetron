@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Nemetron LangChain Proxy
 
 A lightweight **OpenAI-compatible proxy** for your local **Nemetron 30B** model, built with **FastAPI** and **LangChain Core**.
@@ -60,11 +59,11 @@ Key variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NEMETRON_BASE_URL` | `http://localhost:11434` | Your local Nemetron API |
+| `NEMETRON_BASE_URL` | `http://10.33.11.12:8103` | Your local Nemetron API |
 | `NEMETRON_MODEL` | `nemetron-30b` | Model name reported to clients |
 | `PROXY_PORT` | `8000` | Port the proxy listens on |
-| `DEFAULT_MAX_TOKENS` | `8192` | Default output tokens if client sends none |
-| `MAX_OUTPUT_TOKENS` | `32768` | Hard ceiling for output tokens |
+| `DEFAULT_MAX_TOKENS` | `262000` | Default output tokens if client sends none |
+| `MAX_OUTPUT_TOKENS` | `262000` | Hard ceiling for output tokens |
 | `ALLOWED_TOOLS` | comma-separated | Curated tool names exposed to the model |
 
 ### 3. Start the proxy
@@ -245,6 +244,9 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 - The proxy does **not** use `langchain-community`. Only `langchain-core` is required.
 - Streaming responses are supported; the agent loop runs internally first, then the final answer is streamed.
 - If the upstream Nemetron API is not running, the proxy will return an error on the first request.
-=======
-# nemetron
->>>>>>> 367bc0da30251749c8e0e7e3b5f4c71ce228ca6e
+
+## Thinking Tag Filtering
+
+The proxy automatically strips `<think>...</think>` and similar reasoning tags from model responses before returning them to VS Code. You only see the final answer.
+
+---

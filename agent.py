@@ -9,6 +9,7 @@ from langchain_core.tools import BaseTool
 
 from chat_model import NemetronChatModel
 from config import settings
+from text_cleaner import strip_thinking_tags
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class NemetronAgent:
                 response = AIMessage(content=str(response.content))
 
             if not response.tool_calls:
-                return response.content or ""
+                return strip_thinking_tags(response.content or "")
 
             history.append(response)
 
@@ -103,14 +104,18 @@ class NemetronAgent:
                 response = AIMessage(content=str(response.content))
 
             if not response.tool_calls:
-                # Stream the final response
+                # Buffer final response, strip thinking tags, then stream clean content
+                buffered_content = ""
                 async for chunk in self.model.astream(
                     history,
                     tools=active_tools,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 ):
-                    yield chunk
+                    buffered_content += chunk.message.content or ""
+                cleaned = strip_thinking_tags(buffered_content)
+                if cleaned:
+                    yield AIMessage(content=cleaned)
                 return
 
             history.append(response)
