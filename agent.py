@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
 from chat_model import NemetronChatModel
@@ -28,6 +28,14 @@ class NemetronAgent:
         self.tool_map = {tool.name: tool for tool in self.tools}
         self.max_iterations = max_iterations
 
+    def _ensure_system_prompt(self, messages: list[BaseMessage]) -> list[BaseMessage]:
+        """Prepend a default system prompt if none is present."""
+        if not messages:
+            return [SystemMessage(content=settings.default_system_prompt)]
+        if isinstance(messages[0], SystemMessage):
+            return messages
+        return [SystemMessage(content=settings.default_system_prompt)] + messages
+
     async def arun(
         self,
         messages: list[BaseMessage],
@@ -37,7 +45,7 @@ class NemetronAgent:
     ) -> str:
         """Run the agent loop and return the final text response."""
         active_tools = tools if tools is not None else self.tools
-        history = list(messages)
+        history = self._ensure_system_prompt(list(messages))
 
         for iteration in range(self.max_iterations):
             logger.debug("Agent iteration %d", iteration + 1)
@@ -52,7 +60,10 @@ class NemetronAgent:
                 response = AIMessage(content=str(response.content))
 
             if not response.tool_calls:
-                return strip_thinking_tags(response.content or "")
+                final_content = strip_thinking_tags(response.content or "")
+                if not final_content.strip():
+                    final_content = "I received your request but the model returned an empty response. Please try again."
+                return final_content
 
             history.append(response)
 
@@ -90,7 +101,7 @@ class NemetronAgent:
     ):
         """Run the agent loop and stream the final assistant response."""
         active_tools = tools if tools is not None else self.tools
-        history = list(messages)
+        history = self._ensure_system_prompt(list(messages))
 
         for iteration in range(self.max_iterations):
             response = await self.model.ainvoke(
@@ -114,8 +125,9 @@ class NemetronAgent:
                 ):
                     buffered_content += chunk.message.content or ""
                 cleaned = strip_thinking_tags(buffered_content)
-                if cleaned:
-                    yield AIMessage(content=cleaned)
+                if not cleaned.strip():
+                    cleaned = "I received your request but the model returned an empty response. Please try again."
+                yield AIMessage(content=cleaned)
                 return
 
             history.append(response)

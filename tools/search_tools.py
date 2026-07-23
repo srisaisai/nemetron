@@ -17,15 +17,16 @@ class SearchCodebaseInput(BaseModel):
         default=None, description="Optional glob pattern to filter files, e.g. '*.py'."
     )
     max_results: int = Field(
-        default=50, description="Maximum number of matches to return."
+        default=200, description="Maximum number of matches to return."
     )
 
 
 class SearchCodebaseTool(BaseTool):
     name: ClassVar[str] = "search_codebase"
     description: str = (
-        "Search file contents in a directory using a regex pattern. "
-        "Optionally filter by file glob and limit results."
+        "Search file contents in a directory using a regex pattern. Use this when the user "
+        "asks you to find, grep, or search for code, functions, variables, or patterns. "
+        "Optionally filter by file glob (e.g. '*.py') and limit results."
     )
     args_schema: type[BaseModel] = SearchCodebaseInput
 
@@ -34,7 +35,7 @@ class SearchCodebaseTool(BaseTool):
         path: str,
         pattern: str,
         file_pattern: Optional[str] = None,
-        max_results: int = 50,
+        max_results: int = 200,
     ) -> str:
         try:
             dir_path = Path(path).resolve()

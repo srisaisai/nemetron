@@ -20,8 +20,9 @@ class RunCommandsInput(BaseModel):
 class RunCommandsTool(BaseTool):
     name: ClassVar[str] = "run_commands"
     description: str = (
-        "Run a shell command and return stdout/stderr. "
-        "Use with caution and avoid destructive commands."
+        "Run a shell command and return stdout/stderr. Use this when the user asks you "
+        "to run, execute, test, build, or install something. You can specify a working "
+        "directory and timeout."
     )
     args_schema: type[BaseModel] = RunCommandsInput
 

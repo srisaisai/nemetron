@@ -29,6 +29,15 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    default_system_prompt: str = (
+        "You are a helpful coding assistant. "
+        "Answer questions directly and completely when you can. "
+        "Use tools only when you need to read files, search code, run commands, or fetch web content. "
+        "If the user asks you to explain code, analyze it, or answer a question, respond directly without asking how to assist. "
+        "Be proactive: if the user mentions a file path, read it. If they mention a codebase, search it. "
+        "Do not ask clarifying questions when the task is clear. Provide thorough, complete answers."
+    )
+
     @property
     def allowed_tool_set(self) -> set[str]:
         return {name.strip() for name in self.allowed_tools.split(",") if name.strip()}

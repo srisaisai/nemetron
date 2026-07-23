@@ -14,7 +14,10 @@ class ListDirectoryInput(BaseModel):
 
 class ListDirectoryTool(BaseTool):
     name: ClassVar[str] = "list_directory"
-    description: str = "List files and directories. Set recursive=True for deep listing."
+    description: str = (
+        "List files and directories. Use this when the user asks you to explore, "
+        "browse, or see what's in a folder. Set recursive=True for deep listing."
+    )
     args_schema: type[BaseModel] = ListDirectoryInput
 
     def _run(self, path: str, recursive: bool = False) -> str:
@@ -46,7 +49,10 @@ class CreateFolderInput(BaseModel):
 
 class CreateFolderTool(BaseTool):
     name: ClassVar[str] = "create_folder"
-    description: str = "Create a directory (and parent directories if needed)."
+    description: str = (
+        "Create a directory (and parent directories if needed). Use this when the user "
+        "asks you to create a folder, make a directory, or set up a project structure."
+    )
     args_schema: type[BaseModel] = CreateFolderInput
 
     def _run(self, path: str) -> str:

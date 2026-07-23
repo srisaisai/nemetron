@@ -10,19 +10,19 @@ from pydantic import BaseModel, Field
 class FetchWebContentInput(BaseModel):
     url: str = Field(description="URL to fetch.")
     max_length: int = Field(
-        default=20000, description="Maximum characters to return."
+        default=50000, description="Maximum characters to return."
     )
 
 
 class FetchWebContentTool(BaseTool):
     name: ClassVar[str] = "fetch_web_content"
     description: str = (
-        "Fetch content from a URL and return it as text. "
-        "Useful for reading documentation or references."
+        "Fetch content from a URL and return it as text. Use this when the user asks you "
+        "to read a webpage, fetch documentation, or retrieve online content."
     )
     args_schema: type[BaseModel] = FetchWebContentInput
 
-    def _run(self, url: str, max_length: int = 20000) -> str:
+    def _run(self, url: str, max_length: int = 50000) -> str:
         try:
             with httpx.Client(timeout=30.0, follow_redirects=True) as client:
                 response = client.get(url)

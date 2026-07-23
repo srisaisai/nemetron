@@ -15,7 +15,11 @@ class ReadFileInput(BaseModel):
 
 class ReadFileTool(BaseTool):
     name: ClassVar[str] = "read_file"
-    description: str = "Read the contents of a file. Optionally specify start_line and end_line to read a range."
+    description: str = (
+        "Read the contents of a file. Use this when the user mentions a file path "
+        "or asks you to read, view, or analyze a file. You can read the entire file "
+        "or a specific line range using start_line and end_line."
+    )
     args_schema: type[BaseModel] = ReadFileInput
 
     def _run(self, path: str, start_line: Optional[int] = None, end_line: Optional[int] = None) -> str:
@@ -49,7 +53,10 @@ class ReadMultipleFilesInput(BaseModel):
 
 class ReadMultipleFilesTool(BaseTool):
     name: ClassVar[str] = "read_multiple_files"
-    description: str = "Read the contents of multiple files at once."
+    description: str = (
+        "Read the contents of multiple files at once. Use this when the user asks you "
+        "to compare, analyze, or reference several files together."
+    )
     args_schema: type[BaseModel] = ReadMultipleFilesInput
 
     def _run(self, paths: list[str]) -> str:

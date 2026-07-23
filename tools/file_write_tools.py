@@ -15,7 +15,10 @@ class WriteFileInput(BaseModel):
 
 class WriteFileTool(BaseTool):
     name: ClassVar[str] = "write_file"
-    description: str = "Write content to a file. Set overwrite=True to replace an existing file."
+    description: str = (
+        "Write content to a file. Use this when the user asks you to create a new file. "
+        "Set overwrite=True to replace an existing file."
+    )
     args_schema: type[BaseModel] = WriteFileInput
 
     def _run(self, path: str, content: str, overwrite: bool = False) -> str:
@@ -39,7 +42,11 @@ class EditFileInput(BaseModel):
 
 class EditFileTool(BaseTool):
     name: ClassVar[str] = "edit_file"
-    description: str = "Replace old_text with new_text in a file. The old_text must match exactly."
+    description: str = (
+        "Replace old_text with new_text in a file. Use this when the user asks you to "
+        "modify, update, or fix a specific part of an existing file. The old_text must "
+        "match exactly."
+    )
     args_schema: type[BaseModel] = EditFileInput
 
     def _run(self, path: str, old_text: str, new_text: str) -> str:
