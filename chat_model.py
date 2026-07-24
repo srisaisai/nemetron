@@ -149,14 +149,40 @@ class NemetronChatModel(BaseChatModel):
             max_tokens=kwargs.get("max_tokens", self.max_tokens),
             stop=stop,
         ):
-            delta = chunk.get("choices", [{}])[0].get("delta", {})
+            choices = chunk.get("choices") or [{}]
+            choice = choices[0] if choices else {}
+            delta = choice.get("delta", {}) or {}
             delta_content = delta.get("content") or ""
-            if delta_content:
-                yield ChatGenerationChunk(
-                    message=AIMessageChunk(content=delta_content),
-                    generation_info={"finish_reason": None},
+
+            # Parse tool-call deltas so passthrough streaming can forward them
+            # as proper OpenAI streaming tool_calls (instead of dropping them).
+            tool_call_chunks: list[dict[str, Any]] = []
+            for tc in delta.get("tool_calls") or []:
+                func = tc.get("function", {}) or {}
+                tool_call_chunks.append(
+                    {
+                        "index": tc.get("index", 0),
+                        "id": tc.get("id"),
+                        "name": func.get("name"),
+                        "args": func.get("arguments", "") or "",
+                    }
                 )
 
+            finish_reason = choice.get("finish_reason")
+
+            if delta_content or tool_call_chunks:
+                # AIMessageChunk.tool_call_chunks must be a list (not None), so
+                # only supply it when there are actual fragments.
+                msg_kwargs: dict[str, Any] = {"content": delta_content}
+                if tool_call_chunks:
+                    msg_kwargs["tool_call_chunks"] = tool_call_chunks
+                yield ChatGenerationChunk(
+                    message=AIMessageChunk(**msg_kwargs),
+                    generation_info={"finish_reason": finish_reason},
+                )
+
+        # Guarantee a terminal chunk so downstream consumers see a stop signal
+        # even if the upstream omitted an explicit finish_reason chunk.
         yield ChatGenerationChunk(
             message=AIMessageChunk(content=""),
             generation_info={"finish_reason": "stop"},
