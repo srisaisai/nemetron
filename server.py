@@ -91,64 +91,69 @@ async def _passthrough_stream(model, messages, tools, request):
 
     thinking_filter = StreamThinkingFilter()
     has_tool_calls = False
+    try:
+        async for chunk in model.astream(
+            messages,
+            tools=tools,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens if request.max_tokens else None,
+        ):
+            # --- Content: strip thinking tags in a streaming-safe way ---
+            content = getattr(chunk, "content", None) or ""
+            if content:
+                safe = thinking_filter.feed(content)
+                if safe:
+                    yield _content_delta(safe)
 
-    async for chunk in model.astream(
-        messages,
-        tools=tools,
-        temperature=request.temperature,
-        max_tokens=request.max_tokens if request.max_tokens else None,
-    ):
-        # --- Content: strip thinking tags in a streaming-safe way ---
-        content = getattr(chunk, "content", None) or ""
-        if content:
-            safe = thinking_filter.feed(content)
-            if safe:
-                yield _content_delta(safe)
-
-        # --- Tool-call deltas: forward as OpenAI streaming tool_calls ---
-        raw_tcc = getattr(chunk, "tool_call_chunks", None) or []
-        if raw_tcc:
-            has_tool_calls = True
-            delta_tool_calls = []
-            for tc in raw_tcc:
-                if not isinstance(tc, dict):
-                    continue
-                entry: dict = {
-                    "index": tc.get("index", 0),
-                    "type": "function",
-                    "function": {},
-                }
-                fn = entry["function"]
-                tc_id = tc.get("id")
-                tc_name = tc.get("name")
-                tc_args = tc.get("args", "")
-                # OpenAI streams id/name only on the first fragment for an
-                # index; subsequent fragments carry only more arguments.
-                if tc_id:
-                    entry["id"] = tc_id
-                if tc_name:
-                    fn["name"] = tc_name
-                if tc_args:
-                    fn["arguments"] = tc_args
-                delta_tool_calls.append(entry)
-            if delta_tool_calls:
-                yield _tool_calls_delta(delta_tool_calls)
-
-    # Flush any content that was held back by the thinking filter (e.g. text
-    # right before a still-open tag that never closed).
-    tail = thinking_filter.flush()
-    if tail:
-        yield _content_delta(tail)
-
-    finish_reason = "tool_calls" if has_tool_calls else "stop"
-    yield _sse({
-        "id": completion_id,
-        "object": "chat.completion.chunk",
-        "created": created,
-        "model": request.model,
-        "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
-    })
-    yield "data: [DONE]\n\n"
+            # --- Tool-call deltas: forward as OpenAI streaming tool_calls ---
+            raw_tcc = getattr(chunk, "tool_call_chunks", None) or []
+            if raw_tcc:
+                has_tool_calls = True
+                delta_tool_calls = []
+                for tc in raw_tcc:
+                    if not isinstance(tc, dict):
+                        continue
+                    entry: dict = {
+                        "index": tc.get("index", 0),
+                        "type": "function",
+                        "function": {},
+                    }
+                    fn = entry["function"]
+                    tc_id = tc.get("id")
+                    tc_name = tc.get("name")
+                    tc_args = tc.get("args", "")
+                    # OpenAI streams id/name only on the first fragment for an
+                    # index; subsequent fragments carry only more arguments.
+                    if tc_id:
+                        entry["id"] = tc_id
+                    if tc_name:
+                        fn["name"] = tc_name
+                    if tc_args:
+                        fn["arguments"] = tc_args
+                    delta_tool_calls.append(entry)
+                if delta_tool_calls:
+                    yield _tool_calls_delta(delta_tool_calls)
+    except Exception as exc:
+        # Upstream connection failure / error mid-stream. Return a well-formed
+        # SSE stream (content + finish + [DONE]) so the client never sees a
+        # broken "incomplete chunked read" connection drop.
+        logger.exception("Error during passthrough stream")
+        yield _content_delta(f"I encountered an error: {exc}")
+    finally:
+        # Flush any content held back by the thinking filter (e.g. text right
+        # before a still-open tag that never closed).
+        tail = thinking_filter.flush()
+        if tail:
+            yield _content_delta(tail)
+        finish_reason = "tool_calls" if has_tool_calls else "stop"
+        yield _sse({
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": request.model,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
+        })
+        yield "data: [DONE]\n\n"
 
 
 @app.get("/v1/models")

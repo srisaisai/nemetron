@@ -428,6 +428,50 @@ def _parse_sse(text: str) -> list[dict]:
     return events
 
 
+def test_passthrough_streaming_upstream_error_is_well_formed():
+    """If the upstream is unreachable, streaming passthrough must still return a
+    complete, well-formed SSE stream (error content + finish_reason + [DONE])
+    instead of dropping the connection mid-stream ("incomplete chunked read")."""
+    import config
+
+    original_base_url = config.settings.nemetron_base_url
+    # Point at a port where nothing listens -> connection refused.
+    config.settings.nemetron_base_url = "http://127.0.0.1:19999"
+
+    try:
+        client = TestClient(app)
+        resp = client.post(
+            "/v1/chat/completions",
+            headers={"X-Tool-Mode": "passthrough"},
+            json={
+                "model": "nemetron-30b",
+                "messages": [{"role": "user", "content": "hi"}],
+                "stream": True,
+                "max_tokens": 64,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        # The stream must terminate properly.
+        assert resp.text.rstrip().endswith("data: [DONE]"), "stream did not end with [DONE]"
+        events = _parse_sse(resp.text)
+        assert events, "expected SSE events"
+        content = ""
+        finish_reason = None
+        for evt in events:
+            choice = evt["choices"][0]
+            delta = choice.get("delta", {})
+            if delta.get("content"):
+                content += delta["content"]
+            if choice.get("finish_reason"):
+                finish_reason = choice["finish_reason"]
+        assert finish_reason == "stop", finish_reason
+        assert "error" in content.lower(), repr(content)
+        print("Streaming upstream-error resilience OK:", repr(content[:80]))
+    finally:
+        config.settings.nemetron_base_url = original_base_url
+
+
+
 def test_passthrough_streaming_tool_calls():
     """Streaming passthrough must forward tool_calls as proper delta.tool_calls
     (not plain text) so the client can execute them."""
@@ -602,5 +646,7 @@ if __name__ == "__main__":
     test_passthrough_mode()
     test_passthrough_streaming_tool_calls()
     test_passthrough_streaming_strips_thinking()
+    test_passthrough_streaming_upstream_error_is_well_formed()
+
     test_stream_thinking_filter_unit()
     print("All tests passed!")

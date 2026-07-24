@@ -58,13 +58,22 @@ class NemetronClient:
             if value is not None and key not in payload:
                 payload[key] = value
 
+        url = self._endpoint("/v1/chat/completions")
         async with httpx.AsyncClient(timeout=httpx.Timeout(600.0)) as client:
-            response = await client.post(
-                self._endpoint("/v1/chat/completions"),
-                headers=self.headers,
-                json=payload,
-            )
-            response.raise_for_status()
+            try:
+                response = await client.post(url, headers=self.headers, json=payload)
+            except httpx.HTTPError as exc:
+                # Connection-level failure (timeout, refused, DNS, ...).
+                # Surface a clear, actionable message instead of a bare exception.
+                raise RuntimeError(
+                    f"Could not connect to upstream {url}: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+            if response.status_code >= 400:
+                raise RuntimeError(
+                    f"Upstream returned {response.status_code} from {url}: "
+                    f"{response.text[:500]}"
+                )
             return response.json()
 
     async def stream_chat_completion(
@@ -95,24 +104,34 @@ class NemetronClient:
             if value is not None and key not in payload:
                 payload[key] = value
 
+        url = self._endpoint("/v1/chat/completions")
         async with httpx.AsyncClient(timeout=httpx.Timeout(600.0)) as client:
-            async with client.stream(
-                "POST",
-                self._endpoint("/v1/chat/completions"),
-                headers=self.headers,
-                json=payload,
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    line = line.strip()
-                    if not line or line == "data: [DONE]":
-                        continue
-                    if line.startswith("data: "):
-                        data = line[len("data: ") :]
-                        try:
-                            yield json.loads(data)
-                        except json.JSONDecodeError:
+            try:
+                async with client.stream(
+                    "POST", url, headers=self.headers, json=payload
+                ) as response:
+                    if response.status_code >= 400:
+                        body = await response.aread()
+                        raise RuntimeError(
+                            f"Upstream returned {response.status_code} from {url}: "
+                            f"{body.decode('utf-8', 'replace')[:500]}"
+                        )
+                    async for line in response.aiter_lines():
+                        line = line.strip()
+                        if not line or line == "data: [DONE]":
                             continue
+                        if line.startswith("data: "):
+                            data = line[len("data: ") :]
+                            try:
+                                yield json.loads(data)
+                            except json.JSONDecodeError:
+                                continue
+            except httpx.HTTPError as exc:
+                # Connection-level failure (timeout, refused, DNS, ...).
+                raise RuntimeError(
+                    f"Could not connect to upstream {url}: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
 
     async def list_models(self) -> list[str]:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
